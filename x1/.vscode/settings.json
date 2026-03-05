@@ -1,0 +1,6 @@
+{
+    "java.project.referencedLibraries": [
+        "lib/**/*.jar",
+        "libs/jakarta.xml.bind-api-4.0.5.jar"
+    ]
+}
