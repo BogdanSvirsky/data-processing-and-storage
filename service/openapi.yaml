@@ -1,0 +1,430 @@
+openapi: 3.0.3
+info:
+  title: API
+  version: 1.0.0
+servers:
+  - url: /api/v1
+paths:
+  /cities:
+    get:
+      summary: Список всех городов
+      description: Возвращает список всех городов отправления и назначения, доступных в системе.
+      responses:
+
+        '200':
+          description: Успешное получение списка городов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    city:
+                      type: string
+                      example: "Москва"
+                    country:
+                      type: string
+                      example: "Россия"
+
+
+  /airports:
+    get:
+      summary: Список всех аэропортов
+      description: Возвращает полный список доступных аэропортов.
+      responses:
+        '200':
+          description: Успешное получение списка аэропортов
+          content:
+            application/json:
+              schema:
+
+                type: array
+                items:
+                  $ref: '#/components/schemas/Airport'
+
+  /cities/{cityName}/airports:
+    get:
+
+      summary: Список аэропортов в конкретном городе
+      description: Возвращает все аэропорты, находящиеся в указанном городе.
+      parameters:
+        - name: cityName
+          in: path
+          required: true
+          description: Название города на выбранном языке
+          schema:
+            type: string
+            example: "Москва"
+      responses:
+        '200':
+          description: Успешное получение списка аэропортов города
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Airport'
+        '404':
+          description: Город не найден
+
+  /airports/{airportCode}/schedules/inbound:
+    get:
+      summary: Расписание прибывающих рейсов (Inbound)
+
+      description: Возвращает информацию о регулярных рейсах, прибывающих в указанный аэропорт.
+      parameters:
+        - name: airportCode
+          in: path
+          required: true
+          description: Трёхбуквенный код ИАТА аэропорта прибытия
+          schema:
+            type: string
+            pattern: '^[A-Z]{3}$'
+            example: "DME"
+      responses:
+        '200':
+          description: Успешное получение входящего расписания
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [days_of_week, time_of_arrival, flight_no, origin]
+                  properties:
+                    days_of_week:
+                      type: array
+
+                      items:
+                        type: integer
+                        minimum: 1
+                        maximum: 7
+                      example: [1, 3, 5]
+                      description: Дни недели (1 — понедельник, 7 — воскресенье)
+                    time_of_arrival:
+                      type: string
+                      format: time
+                      example: "14:30:00"
+                      description: Планируемое местное время прибытия
+
+                    flight_no:
+                      type: string
+                      example: "PG0242"
+                      description: Номер маршрута (route_no)
+                    origin:
+                      type: string
+                      pattern: '^[A-Z]{3}$'
+
+                      example: "LED"
+                      description: Код аэропорта отправления
+
+  /airports/{airportCode}/schedules/outbound:
+    get:
+      summary: Расписание вылетающих рейсов (Outbound)
+      description: Возвращает информацию о регулярных рейсах, вылетающих из указанного аэропорта.
+      parameters:
+        - name: airportCode
+          in: path
+          required: true
+          description: Трёхбуквенный код ИАТА аэропорта отправления
+          schema:
+            type: string
+            pattern: '^[A-Z]{3}$'
+            example: "LED"
+      responses:
+        '200':
+          description: Успешное получение исходящего расписания
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [days_of_week, time_of_departure, flight_no, destination]
+                  properties:
+                    days_of_week:
+                      type: array
+                      items:
+                        type: integer
+
+                        minimum: 1
+                        maximum: 7
+                      example: [2, 4, 6]
+                    time_of_departure:
+                      type: string
+                      format: time
+                      example: "09:15:00"
+                      description: Местное время вылета по расписанию (scheduled_time)
+                    flight_no:
+
+                      type: string
+                      example: "PG0242"
+                    destination:
+                      type: string
+                      pattern: '^[A-Z]{3}$'
+                      example: "DME"
+                      description: Код аэропорта прибытия
+
+  /routes/search:
+    post:
+      summary: Поиск маршрутов и рейсов между двумя точками
+      description: Ищет варианты перелетов. Все параметры фильтрации передаются в теле запроса.
+      requestBody:
+
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from, from_type, to, to_type, departure_date, booking_class, max_connections]
+              properties:
+                from:
+                  type: string
+                  description: Точка отправления (код аэропорта или название города)
+                  example: "Москва"
+                from_type:
+                  type: string
+                  enum: [airport, city]
+                  example: "city"
+                to:
+                  type: string
+                  description: Точка прибытия (код аэропорта или название города)
+                  example: "LED"
+                to_type:
+                  type: string
+                  enum: [airport, city]
+                  example: "airport"
+                departure_date:
+                  type: string
+                  format: date
+                  description: Дата вылета (поиск рейсов с 00:00:00 указанного дня до 00:00:00 следующего дня)
+                  example: "2026-06-15"
+                booking_class:
+                  type: string
+                  enum: [Economy, Comfort, Business]
+                  example: "Economy"
+                max_connections:
+                  type: string
+                  enum: ["0", "1", "2", "3", "unbound"]
+
+                  description: Лимит количества пересадок (0 — прямой рейс)
+                  example: "0"
+      responses:
+        '200':
+          description: Найденные варианты маршрутов
+          content:
+            application/json:
+
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    connections_count:
+
+                      type: integer
+                      example: 0
+                    total_price:
+
+                      type: number
+                      format: float
+                      example: 5600.00
+                    segments:
+
+                      type: array
+                      description: Цепочка рейсов, составляющая данный маршрут
+                      items:
+                        type: object
+                        properties:
+
+                          flight_id:
+                            type: integer
+                            example: 12345
+                          route_no:
+                            type: string
+                            example: "PG0242"
+                          departure_airport:
+                            type: string
+
+                            example: "VKO"
+
+                          arrival_airport:
+                            type: string
+                            example: "LED"
+                          scheduled_departure:
+                            type: string
+                            format: date-time
+                            example: "2026-06-15T08:00:00Z"
+                          scheduled_arrival:
+                            type: string
+                            format: date-time
+                            example: "2026-06-15T09:30:00Z"
+                          price:
+                            type: number
+                            format: float
+                            example: 5600.00
+
+  /bookings:
+
+    post:
+      summary: Создание бронирования для одного пассажира
+      description: Регистрирует бронирование, оформляет билет и связывает его с выбранными сегментами рейса.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+
+              type: object
+              required: [passenger_id, passenger_name, flight_ids, fare_conditions]
+
+              properties:
+                passenger_id:
+                  type: string
+                  description: Номер документа (код страны + цифры)
+                  example: "4508 123456"
+                passenger_name:
+                  type: string
+
+                  description: Имя и фамилия пассажира (Имя первым)
+                  example: "IVAN PETROV"
+                flight_ids:
+                  type: array
+                  description: Идентификаторы рейсов (для стыковочных маршрутов)
+                  items:
+                    type: integer
+                  example: [12345]
+                fare_conditions:
+                  type: string
+                  enum: [Economy, Comfort, Business]
+                  example: "Economy"
+      responses:
+        '201':
+          description: Бронирование успешно создано
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  book_ref:
+                    type: string
+                    description: Уникальный 6-значный код бронирования
+                    example: "A1B2C3"
+                  ticket_no:
+
+                    type: string
+                    description: 13-значный номер электронного билета
+                    example: "5552100000001"
+                  total_amount:
+                    type: number
+                    format: float
+                    example: 5600.00
+                  book_date:
+                    type: string
+                    format: date-time
+                    example: "2026-06-06T08:15:00Z"
+        '400':
+          description: Некорректные данные или отсутствие свободных мест
+
+
+  /check-in:
+    post:
+      summary: Онлайн-регистрация на рейс
+      description: Выполняет регистрацию пассажира на конкретный сегмент рейса по номеру билета. Генерирует посадочный талон.
+      requestBody:
+
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ticket_no, flight_id, seat_no]
+              properties:
+                ticket_no:
+                  type: string
+                  description: 13-значный номер билета
+                  example: "5552100000001"
+                flight_id:
+                  type: integer
+                  description: Идентификатор рейса
+
+                  example: 12345
+                seat_no:
+                  type: string
+                  description: Желаемое номер места (из доступных на схеме салона)
+                  example: "12B"
+      responses:
+        '200':
+          description: Регистрация успешно пройдена, талон сформирован
+
+          content:
+            application/json:
+
+              schema:
+                type: object
+                properties:
+                  ticket_no:
+                    type: string
+                    example: "5552100000001"
+                  flight_id:
+                    type: integer
+                    example: 12345
+                  seat_no:
+                    type: string
+                    example: "12B"
+                  boarding_no:
+                    type: integer
+                    description: Порядковый номер посадочного талона на данном рейсе
+                    example: 42
+                  boarding_time:
+                    type: string
+                    format: date-time
+                    description: Время прохождения посадки/регистрации
+
+                    example: "2026-06-14T23:45:00Z"
+        '400':
+          description: Ошибка регистрации (место занято, регистрация еще не открыта или неверный билет)
+
+components:
+  schemas:
+
+    Airport:
+
+      type: object
+      required: [airport_code, airport_name, city, country, coordinates, timezone]
+      properties:
+        airport_code:
+          type: string
+
+          pattern: '^[A-Z]{3}$'
+          description: Трёхбуквенный код ИАТА
+          example: "DME"
+        airport_name:
+          type: string
+          description: Название аэропорта на выбранном языке
+          example: "Домодедово"
+        city:
+          type: string
+          description: Город на выбранном языке
+          example: "Москва"
+        country:
+          type: string
+          description: Страна на выбранном языке
+
+          example: "Россия"
+        coordinates:
+          type: object
+          description: Географические координаты (долгота и широта)
+          properties:
+            lon:
+              type: number
+              example: 37.906111
+            lat:
+              type: number
+              example: 55.408611
+        timezone:
+
+          type: string
+          description: Часовой пояс аэропорта
+          example: "Europe/Moscow"
