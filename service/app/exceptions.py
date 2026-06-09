@@ -16,3 +16,7 @@ class SeatAlreadyTakenError(Exception):
 
 class FlightNotAvailableError(Exception):
     pass
+
+
+class AlreadyCheckedInError(Exception):
+    pass

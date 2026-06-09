@@ -4,6 +4,7 @@ import asyncpg
 
 from app.entities import CheckInResult
 from app.exceptions import (
+    AlreadyCheckedInError,
     SeatAlreadyTakenError,
     SeatNotAvailableError,
     TicketNotFoundError,
@@ -53,6 +54,14 @@ class CheckinRepository:
             if not seat_ok:
                 raise SeatNotAvailableError(
                     f"Seat {seat_no} not available or wrong fare class")
+
+            existing_bp = await self._conn.fetchval(
+                "SELECT 1 FROM bookings.boarding_passes "
+                "WHERE ticket_no = $1 AND flight_id = $2",
+                ticket_no, flight_id)
+            if existing_bp:
+                raise AlreadyCheckedInError(
+                    f"Ticket {ticket_no} already checked in for flight {flight_id}")
 
             taken = await self._conn.fetchval(
                 "SELECT 1 FROM bookings.boarding_passes "

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.deps import get_checkin_repo
 from app.exceptions import (
+    AlreadyCheckedInError,
     SeatAlreadyTakenError,
     SeatNotAvailableError,
     TicketNotFoundError,
@@ -29,3 +30,5 @@ async def check_in(
             400, detail="Seat not available or wrong fare class")
     except SeatAlreadyTakenError:
         raise HTTPException(400, detail="Seat already taken")
+    except AlreadyCheckedInError:
+        raise HTTPException(400, detail="Already checked in for this flight")

@@ -57,8 +57,8 @@ class RouteRepository:
                     t.flight_id,
                     t.departure_airport::text,
                     t.arrival_airport::text,
-                    t.scheduled_departure,
-                    t.scheduled_arrival,
+                    t.scheduled_departure_local,
+                    t.scheduled_arrival_local,
                     0 AS connections,
                     ARRAY[t.departure_airport::text, t.arrival_airport::text] AS visited,
                     COALESCE(pr.price, 0) AS total_price,
@@ -79,31 +79,30 @@ class RouteRepository:
                 UNION ALL
 
                 SELECT
-                    f.flight_id,
-                    r.departure_airport::text,
-                    r.arrival_airport::text,
-                    f.scheduled_departure,
-                    f.scheduled_arrival,
+                    t.flight_id,
+                    t.departure_airport::text,
+                    t.arrival_airport::text,
+                    t.scheduled_departure_local,
+                    t.scheduled_arrival_local,
                     p.connections + 1,
-                    p.visited || r.arrival_airport::text,
+                    p.visited || t.arrival_airport::text,
                     p.total_price + COALESCE(pr.price, 0),
-                    p.flight_ids || f.flight_id,
+                    p.flight_ids || t.flight_id,
                     p.segment_prices || COALESCE(pr.price, 0)
                 FROM path p
-                JOIN bookings.routes r
-                    ON r.departure_airport = p.arrival_airport
-                JOIN bookings.flights f
-                    ON f.route_no = r.route_no AND r.validity @> f.scheduled_departure
+                JOIN bookings.timetable t
+                    ON t.departure_airport = p.arrival_airport
                 LEFT JOIN bookings.pricing_rules pr
-                    ON pr.route_no = f.route_no AND pr.fare_conditions = $1
-                WHERE f.scheduled_departure > p.scheduled_arrival
-                  AND f.scheduled_departure <= p.scheduled_arrival + INTERVAL '24 hours'
-                  AND NOT (r.arrival_airport = ANY(p.visited))
-                  AND f.status != 'Cancelled'
+                    ON pr.route_no = t.route_no AND pr.fare_conditions = $1
+                WHERE t.scheduled_departure_local >= $3::date::timestamp
+                  AND t.scheduled_departure_local < $3::date::timestamp + INTERVAL '1 day'
+                  AND t.scheduled_departure_local > p.scheduled_arrival_local
+                  AND NOT (t.arrival_airport = ANY(p.visited))
+                  AND t.status != 'Cancelled'
                   AND ($4::int IS NULL OR p.connections + 1 <= $4)
                   AND EXISTS (
                       SELECT 1 FROM bookings.seats s
-                      WHERE s.airplane_code = r.airplane_code AND s.fare_conditions = $1
+                      WHERE s.airplane_code = t.airplane_code AND s.fare_conditions = $1
                   )
             )
             SELECT connections, total_price, flight_ids, segment_prices
@@ -119,13 +118,11 @@ class RouteRepository:
             {fid for r in route_rows for fid in r["flight_ids"]})
 
         flight_rows = await self._conn.fetch("""
-            SELECT flight_id, f.route_no,
+            SELECT flight_id, route_no,
                    departure_airport::text AS departure_airport,
                    arrival_airport::text AS arrival_airport,
-                   scheduled_departure, scheduled_arrival
-            FROM bookings.flights f
-            JOIN bookings.routes r
-                ON r.route_no = f.route_no AND r.validity @> f.scheduled_departure
+                   scheduled_departure_local, scheduled_arrival_local
+            FROM bookings.timetable
             WHERE flight_id = ANY($1::int[])
         """, all_flight_ids)
 
@@ -139,8 +136,8 @@ class RouteRepository:
                     route_no=flights[fid]["route_no"],
                     departure_airport=flights[fid]["departure_airport"],
                     arrival_airport=flights[fid]["arrival_airport"],
-                    scheduled_departure=flights[fid]["scheduled_departure"],
-                    scheduled_arrival=flights[fid]["scheduled_arrival"],
+                    scheduled_departure=flights[fid]["scheduled_departure_local"],
+                    scheduled_arrival=flights[fid]["scheduled_arrival_local"],
                     price=price,
                 )
                 for fid, price in zip(r["flight_ids"], r["segment_prices"])

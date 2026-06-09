@@ -1,0 +1,49 @@
+@startuml
+' ER-диаграмма для people.xml
+' Сущности и связи на основе структуры XML-файла
+
+entity Person {
+  * person_id : varchar <<PK>>
+  --
+  first_name : varchar
+  family_name : varchar
+  gender : varchar
+  children_count : integer
+  siblings_count : integer
+}
+
+entity ParentChild {
+  * parent_id : varchar <<PK, FK>>
+  * child_id : varchar <<PK, FK>>
+  --
+  relationship_type : varchar
+}
+
+entity Marriage {
+  * marriage_id : integer <<PK>>
+  --
+  person1_id : varchar <<FK>>
+  person2_id : varchar <<FK>>
+  marriage_type : varchar
+}
+
+entity SiblingLink {
+  * person_id : varchar <<PK, FK>>
+  * sibling_person_id : varchar <<PK, FK>>
+  --
+  sibling_name : varchar
+  relationship_type : varchar
+}
+
+' === Связи ===
+
+Person ||--o{ ParentChild : "является родителем"
+Person ||--o{ ParentChild : "является ребёнком"
+
+Person ||--o{ Marriage : "супруг(а) №1"
+Person ||--o{ Marriage : "супруг(а) №2"
+
+Person ||--o{ SiblingLink : "person"
+Person ||--o{ SiblingLink : "sibling"
+
+@enduml
